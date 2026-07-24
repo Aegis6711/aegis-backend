@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import anthropic
 import os
@@ -145,6 +146,124 @@ class ChatRequest(BaseModel):
 
 
 @app.get("/")
+@app.get("/app", response_class=HTMLResponse)
+def voice_app():
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Aegis</title>
+<style>
+  body {
+    margin: 0; padding: 0;
+    height: 100vh;
+    background: #1a0533;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: -apple-system, sans-serif;
+    color: white;
+    text-align: center;
+  }
+  #orb {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #c084fc 0%, #8b3ce8 50%, #2a0f4d 100%);
+    box-shadow: 0 0 60px 20px rgba(139,60,232,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 60px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    user-select: none;
+  }
+  #orb.listening { animation: pulse 1s infinite; box-shadow: 0 0 80px 30px rgba(139,60,232,0.8); }
+  #orb.thinking { opacity: 0.6; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  #status { margin-top: 30px; font-size: 18px; min-height: 24px; padding: 0 30px; }
+  #transcript { margin-top: 15px; font-size: 14px; color: #c9a8f5; padding: 0 30px; min-height: 20px; }
+</style>
+</head>
+<body>
+  <div id="orb">🎤</div>
+  <div id="status">Tap the orb to talk</div>
+  <div id="transcript"></div>
+
+<script>
+  const orb = document.getElementById('orb');
+  const statusEl = document.getElementById('status');
+  const transcriptEl = document.getElementById('transcript');
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+
+  function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.onend = () => {
+      statusEl.textContent = "Tap the orb to talk";
+      orb.classList.remove('thinking');
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startListening() {
+    if (isListening) return;
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isListening = true;
+      orb.classList.add('listening');
+      statusEl.textContent = "Listening...";
+      transcriptEl.textContent = "";
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      transcriptEl.textContent = '"' + text + '"';
+      sendToAegis(text);
+    };
+
+    recognition.onerror = (event) => {
+      statusEl.textContent = "Didn't catch that — tap to try again";
+      orb.classList.remove('listening');
+      isListening = false;
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      orb.classList.remove('listening');
+    };
+
+    recognition.start();
+  }
+
+  async function sendToAegis(message) {
+    statusEl.textContent = "Thinking...";
+    orb.classList.add('thinking');
+    try {
+      const response = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message })
+      });
+      const data = await response.json();
+      statusEl.textContent = data.reply;
+      speak(data.reply);
+    } catch (err) {
+      statusEl.textContent = "Connection error — tap to try again";
+      orb.classList.remove('thinking');
+    }
+  }
+
+  orb.addEventListener('click', startListening);
+</script>
+</body>
+</html>
+"""
 def read_root():
     return {"status": "Aegis backend is alive"}
 
