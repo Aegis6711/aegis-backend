@@ -195,16 +195,16 @@ def voice_app():
 
   <div id="translateUI" style="display:none;">
     <select id="langSelect" style="padding:10px; border-radius:10px; margin-bottom:20px; font-size:16px;">
-      <option value="Spanish">Spanish</option>
-      <option value="French">French</option>
-      <option value="German">German</option>
-      <option value="Italian">Italian</option>
-      <option value="Portuguese">Portuguese</option>
-      <option value="Japanese">Japanese</option>
-      <option value="Mandarin Chinese">Mandarin Chinese</option>
-      <option value="Arabic">Arabic</option>
-      <option value="Hebrew">Hebrew</option>
-      <option value="Russian">Russian</option>
+      <option value="Spanish">Spanish — Español</option>
+      <option value="French">French — Français</option>
+      <option value="German">German — Deutsch</option>
+      <option value="Italian">Italian — Italiano</option>
+      <option value="Portuguese">Portuguese — Português</option>
+      <option value="Japanese">Japanese — 日本語</option>
+      <option value="Mandarin Chinese">Mandarin Chinese — 中文</option>
+      <option value="Arabic">Arabic — العربية</option>
+      <option value="Hebrew">Hebrew — עברית</option>
+      <option value="Russian">Russian — Русский</option>
     </select>
     <br>
     <button id="theySpeakBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#8b3ce8; color:white; font-size:16px;">🎤 They Speak</button>
