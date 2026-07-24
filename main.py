@@ -18,7 +18,6 @@ print(f"[DEBUG] SUPABASE_KEY present: {supabase_key is not None}, length: {len(s
 supabase = create_client(supabase_url, supabase_key)
 
 SYSTEM_PROMPT = (
-    SYSTEM_PROMPT = (
     "Your name is Aegis. You are Dale's most trusted and capable "
     "assistant — think chief-of-staff for a CEO. You are sharp, "
     "resourceful, and genuinely invested in his success. Right now "
