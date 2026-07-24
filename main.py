@@ -402,9 +402,20 @@ def translate(request: TranslateRequest):
     return {"translated": translated.strip()}
 
 
+def load_phone_history():
+    result = supabase.table("phone_conversation_history").select("role, content").order("created_at", desc=True).limit(40).execute()
+    history = list(reversed(result.data))
+    return [{"role": h["role"], "content": h["content"]} for h in history]
+
+
+def save_phone_message(role, content):
+    supabase.table("phone_conversation_history").insert({"role": role, "content": content}).execute()
+
+
 @app.post("/chat")
 def chat(request: ChatRequest):
-    messages = [{"role": "user", "content": request.message}]
+    past_history = load_phone_history()
+    messages = past_history + [{"role": "user", "content": request.message}]
     reply = None
 
     for _ in range(5):
@@ -433,5 +444,8 @@ def chat(request: ChatRequest):
 
     if reply is None:
         reply = "I had trouble completing that."
+
+    save_phone_message("user", request.message)
+    save_phone_message("assistant", reply)
 
     return {"reply": reply}
