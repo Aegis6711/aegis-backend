@@ -184,7 +184,33 @@ def voice_app():
 </style>
 </head>
 <body>
-  <div id="orb">🎤</div>
+  <div id="modeToggle" style="margin-bottom: 20px;">
+    <button id="chatModeBtn" style="padding:8px 16px; margin:4px; border-radius:20px; border:none; background:#8b3ce8; color:white;">Chat</button>
+    <button id="translateModeBtn" style="padding:8px 16px; margin:4px; border-radius:20px; border:none; background:#4a1a7a; color:white;">Translate</button>
+  </div>
+
+  <div id="chatUI">
+    <div id="orb">🎤</div>
+  </div>
+
+  <div id="translateUI" style="display:none;">
+    <select id="langSelect" style="padding:10px; border-radius:10px; margin-bottom:20px; font-size:16px;">
+      <option value="Spanish">Spanish</option>
+      <option value="French">French</option>
+      <option value="German">German</option>
+      <option value="Italian">Italian</option>
+      <option value="Portuguese">Portuguese</option>
+      <option value="Japanese">Japanese</option>
+      <option value="Mandarin Chinese">Mandarin Chinese</option>
+      <option value="Arabic">Arabic</option>
+      <option value="Hebrew">Hebrew</option>
+      <option value="Russian">Russian</option>
+    </select>
+    <br>
+    <button id="theySpeakBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#8b3ce8; color:white; font-size:16px;">🎤 They Speak</button>
+    <button id="youSpeakBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:16px;">🎤 You Speak</button>
+  </div>
+
   <div id="status">Tap the orb to talk</div>
   <div id="transcript"></div>
 
@@ -260,12 +286,120 @@ def voice_app():
   }
 
   orb.addEventListener('click', startListening);
+
+  const LANG_CODES = {
+    "Spanish": "es-ES", "French": "fr-FR", "German": "de-DE", "Italian": "it-IT",
+    "Portuguese": "pt-BR", "Japanese": "ja-JP", "Mandarin Chinese": "zh-CN",
+    "Arabic": "ar-SA", "Hebrew": "he-IL", "Russian": "ru-RU"
+  };
+
+  const chatModeBtn = document.getElementById('chatModeBtn');
+  const translateModeBtn = document.getElementById('translateModeBtn');
+  const chatUI = document.getElementById('chatUI');
+  const translateUI = document.getElementById('translateUI');
+  const langSelect = document.getElementById('langSelect');
+  const theySpeakBtn = document.getElementById('theySpeakBtn');
+  const youSpeakBtn = document.getElementById('youSpeakBtn');
+
+  chatModeBtn.addEventListener('click', () => {
+    chatUI.style.display = 'block';
+    translateUI.style.display = 'none';
+    statusEl.textContent = "Tap the orb to talk";
+    transcriptEl.textContent = "";
+  });
+
+  translateModeBtn.addEventListener('click', () => {
+    chatUI.style.display = 'none';
+    translateUI.style.display = 'block';
+    statusEl.textContent = "Choose a language, then tap a button";
+    transcriptEl.textContent = "";
+  });
+
+  function speakInLanguage(text, langCode) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
+    utterance.rate = 1.0;
+    utterance.onend = () => { statusEl.textContent = "Choose a language, then tap a button"; };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function translateAndSpeak(text, targetLanguage, speakLangCode) {
+    statusEl.textContent = "Translating...";
+    try {
+      const response = await fetch('/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, target_language: targetLanguage })
+      });
+      const data = await response.json();
+      transcriptEl.textContent = data.translated;
+      statusEl.textContent = data.translated;
+      speakInLanguage(data.translated, speakLangCode);
+    } catch (err) {
+      statusEl.textContent = "Translation error — try again";
+    }
+  }
+
+  function listenOnce(langCode, onResult) {
+    const rec = new SpeechRecognition();
+    rec.lang = langCode;
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => { statusEl.textContent = "Listening..."; transcriptEl.textContent = ""; };
+    rec.onresult = (event) => onResult(event.results[0][0].transcript);
+    rec.onerror = () => { statusEl.textContent = "Didn't catch that — try again"; };
+    rec.start();
+  }
+
+  theySpeakBtn.addEventListener('click', () => {
+    const targetLang = langSelect.value;
+    const foreignCode = LANG_CODES[targetLang];
+    listenOnce(foreignCode, (heardText) => {
+      transcriptEl.textContent = '"' + heardText + '"';
+      translateAndSpeak(heardText, "English", "en-US");
+    });
+  });
+
+  youSpeakBtn.addEventListener('click', () => {
+    const targetLang = langSelect.value;
+    const foreignCode = LANG_CODES[targetLang];
+    listenOnce("en-US", (heardText) => {
+      transcriptEl.textContent = '"' + heardText + '"';
+      translateAndSpeak(heardText, targetLang, foreignCode);
+    });
+  });
 </script>
 </body>
 </html>
 """
 def read_root():
     return {"status": "Aegis backend is alive"}
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    target_language: str
+
+
+@app.post("/translate")
+def translate(request: TranslateRequest):
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=300,
+        system=(
+            "You are a precise, natural real-time translator. Translate "
+            "exactly what is given, into the requested language. Return "
+            "ONLY the translation itself — no explanation, no quotes, no "
+            "extra commentary, just the translated sentence, spoken naturally "
+            "the way a native speaker would actually say it."
+        ),
+        messages=[{
+            "role": "user",
+            "content": f"Translate this into {request.target_language}:\n\n{request.text}"
+        }]
+    )
+    translated = "".join(b.text for b in response.content if b.type == "text")
+    return {"translated": translated.strip()}
 
 
 @app.post("/chat")
