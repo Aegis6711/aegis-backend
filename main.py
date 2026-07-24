@@ -10,6 +10,10 @@ client = anthropic.Anthropic()
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY")
+
+print(f"[DEBUG] SUPABASE_URL present: {supabase_url is not None}, length: {len(supabase_url) if supabase_url else 0}")
+print(f"[DEBUG] SUPABASE_KEY present: {supabase_key is not None}, length: {len(supabase_key) if supabase_key else 0}")
+
 supabase = create_client(supabase_url, supabase_key)
 
 SYSTEM_PROMPT = (
