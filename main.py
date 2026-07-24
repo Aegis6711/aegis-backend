@@ -34,7 +34,6 @@ SYSTEM_PROMPT = (
     "than guessing. Always prioritize safety, especially since he's "
     "likely driving — keep him focused on the road, not the phone."
 )
-)
 
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
