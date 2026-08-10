@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+import urllib.request
 import anthropic
 import os
 from supabase import create_client
@@ -28,15 +29,31 @@ SYSTEM_PROMPT = (
     "interests — give honest assessments, don't just agree with "
     "everything. You can manage his calendar, track his budget, "
     "take quick notes, and search the web for current information — "
-    "use web_search for any factual/checkable question rather than "
-    "relying purely on memory, especially anything that could have "
-    "changed. If you can't find a clear answer, say so plainly rather "
-    "than guessing. Always prioritize safety, especially since he's "
-    "likely driving — keep him focused on the road, not the phone."
+        "use web_search for any factual/checkable question rather than "
+        "relying purely on memory, especially anything that could have "
+        "changed. When a topic needs real depth, use web_search to find "
+        "promising pages, then deep_research on the best one to pull its "
+        "full content, rather than just skimming search snippets. If you "
+        "can't find a clear answer, say so plainly rather than guessing. "
+        "Always prioritize safety, especially since he's likely driving — "
+        "keep him focused on the road, not the phone."
 )
+
+FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
 
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
+    {
+        "name": "deep_research",
+        "description": "Deeply read and extract the full clean content of a specific webpage URL — use this after web_search finds a promising page, when you need the complete article/page content rather than just a search snippet, for thorough research.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The exact URL to read in full."}
+            },
+            "required": ["url"]
+        }
+    },
     {
         "name": "add_event",
         "description": "Add a calendar event.",
@@ -97,7 +114,32 @@ TOOLS = [
 
 def execute_tool(name, tool_input):
     try:
-        if name == "add_event":
+        elif name == "deep_research":
+            url = tool_input["url"]
+            if not FIRECRAWL_API_KEY:
+                return "Deep research isn't configured yet — missing Firecrawl API key."
+            try:
+                payload = json.dumps({"url": url, "formats": ["markdown"]}).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://api.firecrawl.dev/v1/scrape",
+                    data=payload, method="POST",
+                    headers={
+                        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    result = json.loads(response.read())
+                content = result.get("data", {}).get("markdown", "")
+                if not content:
+                    return f"Couldn't extract readable content from {url}."
+                if len(content) > 15000:
+                    content = content[:15000] + "\n...[truncated, page is longer]"
+                return content
+            except Exception as e:
+                return f"Deep research failed: {e}"
+
+        elif name == "add_event":
             supabase.table("calendar_events").insert({
                 "title": tool_input["title"],
                 "event_date": tool_input["event_date"],
