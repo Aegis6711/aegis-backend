@@ -271,8 +271,17 @@ def voice_app():
   let recognition = null;
   let isListening = false;
 
+  function cleanForSpeech(text) {
+    text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+    text = text.replace(/\*(.*?)\*/g, '$1');
+    text = text.replace(/^[-*]\s+/gm, '');
+    text = text.replace(/#+\s*/g, '');
+    text = text.replace(/`([^`]*)`/g, '$1');
+    return text;
+  }
+
   function speak(text) {
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleanForSpeech(text));
     utterance.rate = 1.0;
     utterance.onend = () => {
       statusEl.textContent = "Tap the orb to talk";
@@ -364,7 +373,7 @@ def voice_app():
   });
 
   function speakInLanguage(text, langCode) {
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleanForSpeech(text));
     utterance.lang = langCode;
     utterance.rate = 1.0;
     utterance.onend = () => { statusEl.textContent = "Choose a language, then tap a button"; };
