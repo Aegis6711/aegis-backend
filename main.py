@@ -275,6 +275,8 @@ def voice_app():
     text = text.replace(/\*\*(.*?)\*\*/g, '$1');
     text = text.replace(/\*(.*?)\*/g, '$1');
     text = text.replace(/^[-*]\s+/gm, '');
+    text = text.replace(/^-{2,}\s*$/gm, '');
+    text = text.replace(/-{2,}/g, ' ');
     text = text.replace(/#+\s*/g, '');
     text = text.replace(/`([^`]*)`/g, '$1');
     return text;
