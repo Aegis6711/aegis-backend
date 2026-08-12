@@ -31,7 +31,11 @@ SYSTEM_PROMPT = (
     "take quick notes, and search the web for current information — "
         "use web_search for any factual/checkable question rather than "
         "relying purely on memory, especially anything that could have "
-        "changed. When a topic needs real depth, use web_search to find "
+        "changed. If Dale references a past conversation you can't "
+        "currently see, use search_past_conversations to look it up "
+        "rather than saying you don't have access — your memory search "
+        "genuinely goes back further than what's immediately visible. "
+        "When a topic needs real depth, use web_search to find "
         "promising pages, then deep_research on the best one to pull its "
         "full content, rather than just skimming search snippets. If you "
         "can't find a clear answer, say so plainly rather than guessing. "
@@ -43,6 +47,17 @@ FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
 
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
+    {
+        "name": "search_past_conversations",
+        "description": "Search back through the full conversation history (not just the recent messages) for a specific topic or thing Dale mentioned before. Use this whenever he references a past conversation you don't currently have visibility into — e.g. 'remember when I told you about X' or 'what did we discuss the other day about Y'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Keyword or phrase to search for in past messages."}
+            },
+            "required": ["query"]
+        }
+    },
     {
         "name": "deep_research",
         "description": "Deeply read and extract the full clean content of a specific webpage URL — use this after web_search finds a promising page, when you need the complete article/page content rather than just a search snippet, for thorough research.",
@@ -114,6 +129,15 @@ TOOLS = [
 
 def execute_tool(name, tool_input):
     try:
+        if name == "search_past_conversations":
+            query = tool_input["query"]
+            result = supabase.table("phone_conversation_history").select("role, content, created_at").ilike("content", f"%{query}%").order("created_at", desc=True).limit(15).execute()
+            if not result.data:
+                return f"No past conversation found mentioning '{query}'."
+            lines = [f"[{m['created_at'][:10]}] {m['role']}: {m['content']}" for m in result.data]
+            return "Relevant past messages found:\n" + "\n".join(lines)
+
+        elif name == "deep_research":
         if name == "deep_research":
             url = tool_input["url"]
             if not FIRECRAWL_API_KEY:
