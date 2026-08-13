@@ -201,7 +201,6 @@ def execute_tool(name, tool_input):
                 return f"Error sending email: {e}"
 
         elif name == "deep_research":
-        if name == "deep_research":
             url = tool_input["url"]
             if not FIRECRAWL_API_KEY:
                 return "Deep research isn't configured yet — missing Firecrawl API key."
