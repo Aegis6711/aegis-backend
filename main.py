@@ -219,7 +219,6 @@ def execute_tool(name, tool_input):
                 return f"Error saving fact: {e}"
 
         elif name == "read_recent_emails":
-        if name == "read_recent_emails":
             if not composio_client:
                 return "Email isn't configured yet — missing Composio API key."
             try:
