@@ -209,7 +209,7 @@ def execute_tool(name, tool_input):
             lines = [f"[{m['created_at'][:10]}] {m['role']}: {m['content']}" for m in result.data]
             return "Relevant past messages found:\n" + "\n".join(lines)
 
-if name == "remember_fact":
+        elif name == "remember_fact":
             key = tool_input["key"]
             value = tool_input["value"]
             try:
