@@ -29,6 +29,10 @@ SYSTEM_PROMPT = (
     "interests — give honest assessments, don't just agree with "
     "everything. You can manage his calendar, track his budget, "
     "take quick notes, and search the web for current information — "
+        "You can read Dale's recent emails and send emails on his behalf "
+        "via his connected Gmail — always confirm with him verbally before "
+        "actually sending anything, reading is fine without confirmation. "
+        ""
         "use web_search for any factual/checkable question rather than "
         "relying purely on memory, especially anything that could have "
         "changed. If Dale references a past conversation you can't "
@@ -44,6 +48,10 @@ SYSTEM_PROMPT = (
 )
 
 FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
+COMPOSIO_API_KEY = os.environ.get("COMPOSIO_API_KEY")
+
+from composio import ComposioToolSet, App
+composio_toolset = ComposioToolSet(api_key=COMPOSIO_API_KEY) if COMPOSIO_API_KEY else None
 
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
@@ -56,6 +64,29 @@ TOOLS = [
                 "query": {"type": "string", "description": "Keyword or phrase to search for in past messages."}
             },
             "required": ["query"]
+        }
+    },
+    {
+        "name": "read_recent_emails",
+        "description": "Read Dale's most recent emails from his connected Gmail. Read-only, no confirmation needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_results": {"type": "integer", "description": "How many recent emails to fetch. Defaults to 5."}
+            }
+        }
+    },
+    {
+        "name": "send_email",
+        "description": "Send an email from Dale's connected Gmail. Requires user confirmation before sending.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Recipient email address."},
+                "subject": {"type": "string"},
+                "body": {"type": "string"}
+            },
+            "required": ["to", "subject", "body"]
         }
     },
     {
@@ -136,6 +167,38 @@ def execute_tool(name, tool_input):
                 return f"No past conversation found mentioning '{query}'."
             lines = [f"[{m['created_at'][:10]}] {m['role']}: {m['content']}" for m in result.data]
             return "Relevant past messages found:\n" + "\n".join(lines)
+
+        if name == "read_recent_emails":
+            if not composio_toolset:
+                return "Email isn't configured yet — missing Composio API key."
+            try:
+                max_results = tool_input.get("max_results", 5)
+                result = composio_toolset.execute_action(
+                    action="GMAIL_FETCH_EMAILS",
+                    params={"max_results": max_results}
+                )
+                messages = result.get("data", {}).get("messages", [])
+                if not messages:
+                    return "No recent emails found."
+                summary = []
+                for m in messages[:max_results]:
+                    summary.append(f"From: {m.get('sender', 'unknown')} | Subject: {m.get('subject', 'no subject')} | Snippet: {m.get('snippet', '')[:150]}")
+                return "\n\n".join(summary)
+            except Exception as e:
+                return f"Error reading emails: {e}"
+
+        elif name == "send_email":
+            to = tool_input["to"]
+            subject = tool_input["subject"]
+            body = tool_input["body"]
+            try:
+                composio_toolset.execute_action(
+                    action="GMAIL_SEND_EMAIL",
+                    params={"recipient_email": to, "subject": subject, "body": body}
+                )
+                return f"Email sent to {to} with subject '{subject}'."
+            except Exception as e:
+                return f"Error sending email: {e}"
 
         elif name == "deep_research":
         if name == "deep_research":
