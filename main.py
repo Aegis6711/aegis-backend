@@ -50,8 +50,8 @@ SYSTEM_PROMPT = (
 FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
 COMPOSIO_API_KEY = os.environ.get("COMPOSIO_API_KEY")
 
-from composio import ComposioToolSet, App
-composio_toolset = ComposioToolSet(api_key=COMPOSIO_API_KEY) if COMPOSIO_API_KEY else None
+from composio import Composio
+composio_client = Composio(api_key=COMPOSIO_API_KEY) if COMPOSIO_API_KEY else None
 
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
@@ -169,18 +169,20 @@ def execute_tool(name, tool_input):
             return "Relevant past messages found:\n" + "\n".join(lines)
 
         if name == "read_recent_emails":
-            if not composio_toolset:
+            if not composio_client:
                 return "Email isn't configured yet — missing Composio API key."
             try:
                 max_results = tool_input.get("max_results", 5)
-                result = composio_toolset.execute_action(
-                    action="GMAIL_FETCH_EMAILS",
-                    params={"max_results": max_results}
+                result = composio_client.tools.execute(
+                    "GMAIL_FETCH_EMAILS",
+                    user_id="default",
+                    arguments={"max_results": max_results},
+                    dangerously_skip_version_check=True
                 )
                 print(f"[Composio-Debug] Raw result: {result}")
                 messages = result.get("data", {}).get("messages", [])
                 if not messages:
-                    return "No recent emails found."
+                    return f"No recent emails found (or unexpected response shape — check logs). Raw: {str(result)[:500]}"
                 summary = []
                 for m in messages[:max_results]:
                     summary.append(f"From: {m.get('sender', 'unknown')} | Subject: {m.get('subject', 'no subject')} | Snippet: {m.get('snippet', '')[:150]}")
@@ -192,13 +194,17 @@ def execute_tool(name, tool_input):
                 return f"Error reading emails: {e}"
 
         elif name == "send_email":
+            if not composio_client:
+                return "Email isn't configured yet — missing Composio API key."
             to = tool_input["to"]
             subject = tool_input["subject"]
             body = tool_input["body"]
             try:
-                composio_toolset.execute_action(
-                    action="GMAIL_SEND_EMAIL",
-                    params={"recipient_email": to, "subject": subject, "body": body}
+                composio_client.tools.execute(
+                    "GMAIL_SEND_EMAIL",
+                    user_id="default",
+                    arguments={"recipient_email": to, "subject": subject, "body": body},
+                    dangerously_skip_version_check=True
                 )
                 return f"Email sent to {to} with subject '{subject}'."
             except Exception as e:
