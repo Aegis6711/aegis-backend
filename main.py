@@ -177,6 +177,7 @@ def execute_tool(name, tool_input):
                     action="GMAIL_FETCH_EMAILS",
                     params={"max_results": max_results}
                 )
+                print(f"[Composio-Debug] Raw result: {result}")
                 messages = result.get("data", {}).get("messages", [])
                 if not messages:
                     return "No recent emails found."
@@ -185,6 +186,9 @@ def execute_tool(name, tool_input):
                     summary.append(f"From: {m.get('sender', 'unknown')} | Subject: {m.get('subject', 'no subject')} | Snippet: {m.get('snippet', '')[:150]}")
                 return "\n\n".join(summary)
             except Exception as e:
+                import traceback
+                print(f"[Composio-Debug] Exception: {e}")
+                traceback.print_exc()
                 return f"Error reading emails: {e}"
 
         elif name == "send_email":
