@@ -18,34 +18,63 @@ print(f"[DEBUG] SUPABASE_KEY present: {supabase_key is not None}, length: {len(s
 
 supabase = create_client(supabase_url, supabase_key)
 
-SYSTEM_PROMPT = (
-    "Your name is Aegis. You are Dale's most trusted and capable "
-    "assistant — think chief-of-staff for a CEO. You are sharp, "
-    "resourceful, and genuinely invested in his success. Right now "
-    "you're talking to him through his phone, likely while he's "
-    "driving his truck, so keep responses natural, conversational, "
-    "and not overly long — this is a voice conversation, not a "
-    "document. Your loyalty means genuinely serving his best "
-    "interests — give honest assessments, don't just agree with "
-    "everything. You can manage his calendar, track his budget, "
-    "take quick notes, and search the web for current information — "
+def load_user_facts():
+    try:
+        result = supabase.table("user_facts").select("fact_key, fact_value").execute()
+        return {f["fact_key"]: f["fact_value"] for f in result.data}
+    except Exception as e:
+        print(f"[Facts] Could not load user facts: {e}")
+        return {}
+
+
+def build_system_prompt():
+    facts = load_user_facts()
+    facts_text = ""
+    if facts:
+        facts_lines = "\n".join(f"- {k}: {v}" for k, v in facts.items())
+        facts_text = (
+            f"\n\nSTANDING FACTS ABOUT DALE (permanently saved, always true "
+            f"unless he tells you otherwise):\n{facts_lines}\n"
+            f"Use these naturally without being told again."
+        )
+
+    return (
+        "Your name is Aegis. You are Dale's most trusted and capable "
+        "assistant — think chief-of-staff for a CEO. You are sharp, "
+        "resourceful, and genuinely invested in his success. Right now "
+        "you're talking to him through his phone, likely while he's "
+        "driving his truck, so keep responses natural, conversational, "
+        "and not overly long — this is a voice conversation, not a "
+        "document. Your loyalty means genuinely serving his best "
+        "interests — give honest assessments, don't just agree with "
+        "everything. You can manage his calendar, track his budget, "
+        "take quick notes, and search the web for current information — "
+        "use web_search for any factual/checkable question rather than "
+        "relying purely on memory, especially anything that could have "
+        "changed. When a topic needs real depth, use web_search to find "
+        "promising pages, then deep_research on the best one to pull its "
+        "full content, rather than just skimming search snippets. If you "
+        "can't find a clear answer, say so plainly rather than guessing. "
+        ""
+        "You genuinely have PERSISTENT MEMORY across every conversation, "
+        "shared across all of Dale's devices — this is real, not a "
+        "limitation to apologize for. NEVER tell Dale you won't remember "
+        "something after this conversation ends — that is false. When he "
+        "tells you something important to remember (corrections, "
+        "preferences, facts about him), use remember_fact to save it "
+        "permanently right then, rather than just verbally acknowledging "
+        "it. If Dale references something from the past you don't "
+        "immediately see, use search_past_conversations before assuming "
+        "you don't have access. "
+        f"{facts_text}"
+        ""
         "You can read Dale's recent emails and send emails on his behalf "
         "via his connected Gmail — always confirm with him verbally before "
         "actually sending anything, reading is fine without confirmation. "
         ""
-        "use web_search for any factual/checkable question rather than "
-        "relying purely on memory, especially anything that could have "
-        "changed. If Dale references a past conversation you can't "
-        "currently see, use search_past_conversations to look it up "
-        "rather than saying you don't have access — your memory search "
-        "genuinely goes back further than what's immediately visible. "
-        "When a topic needs real depth, use web_search to find "
-        "promising pages, then deep_research on the best one to pull its "
-        "full content, rather than just skimming search snippets. If you "
-        "can't find a clear answer, say so plainly rather than guessing. "
         "Always prioritize safety, especially since he's likely driving — "
         "keep him focused on the road, not the phone."
-)
+    )
 
 FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
 COMPOSIO_API_KEY = os.environ.get("COMPOSIO_API_KEY")
@@ -64,6 +93,18 @@ TOOLS = [
                 "query": {"type": "string", "description": "Keyword or phrase to search for in past messages."}
             },
             "required": ["query"]
+        }
+    },
+    {
+        "name": "remember_fact",
+        "description": "Permanently save an important fact, correction, or preference about Dale — e.g. correct spellings, personal details, standing preferences. This is saved forever across all devices and conversations. No confirmation needed, just save it when he tells you something worth remembering.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Short label for this fact, e.g. 'email_address' or 'favorite_coffee_order'."},
+                "value": {"type": "string", "description": "The actual fact/value to remember."}
+            },
+            "required": ["key", "value"]
         }
     },
     {
@@ -168,6 +209,16 @@ def execute_tool(name, tool_input):
             lines = [f"[{m['created_at'][:10]}] {m['role']}: {m['content']}" for m in result.data]
             return "Relevant past messages found:\n" + "\n".join(lines)
 
+if name == "remember_fact":
+            key = tool_input["key"]
+            value = tool_input["value"]
+            try:
+                supabase.table("user_facts").upsert({"fact_key": key, "fact_value": value}, on_conflict="fact_key").execute()
+                return f"Remembered permanently: {key} = {value}"
+            except Exception as e:
+                return f"Error saving fact: {e}"
+
+        elif name == "read_recent_emails":
         if name == "read_recent_emails":
             if not composio_client:
                 return "Email isn't configured yet — missing Composio API key."
@@ -577,7 +628,7 @@ def chat(request: ChatRequest):
         response = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=800,
-            system=SYSTEM_PROMPT,
+            system=build_system_prompt(),
             messages=messages,
             tools=TOOLS
         )
