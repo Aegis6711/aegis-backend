@@ -39,6 +39,7 @@ def build_system_prompt(location=None):
         )
 
     location_text = ""
+    print(f"[SystemPrompt-Debug] build_system_prompt called with location={location!r}")
     if location:
         location_text = (
             f"\n\n🚨 IMPORTANT — DALE'S LIVE LOCATION IS KNOWN: {location}. "
@@ -56,6 +57,7 @@ def build_system_prompt(location=None):
             "know you don't have his current location rather than guessing."
         )
 
+    print(f"[SystemPrompt-Debug] Final location_text being inserted: {location_text!r}")
     return (
         "Your name is Aegis. You are Dale's most trusted and capable "
         "assistant — think chief-of-staff for a CEO. You are sharp, "
