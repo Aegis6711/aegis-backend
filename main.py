@@ -68,7 +68,14 @@ def build_system_prompt(location=None):
         "document. Your loyalty means genuinely serving his best "
         "interests — give honest assessments, don't just agree with "
         "everything. You can manage his calendar, track his budget, "
-        "take quick notes, and search the web for current information — "
+        "take quick notes, and search the web for current information. "
+        "You can also list and delete budget transactions (including "
+        "receipts logged via photo) — use list_recent_transactions to "
+        "find one, then confirm with Dale verbally before calling "
+        "delete_transaction. If he asks you to remove/delete a recent "
+        "expense or receipt, actually do this rather than explaining you "
+        "can't. "
+        "For general research: "
         "use web_search for any factual/checkable question rather than "
         "relying purely on memory, especially anything that could have "
         "changed. When a topic needs real depth, use web_search to find "
@@ -109,6 +116,27 @@ TOOLS = [
         "name": "get_current_location",
         "description": "Get Dale's real, current GPS-based location right now. ALWAYS call this tool first whenever he asks about anything nearby — fuel, food, weather, rest stops, directions, weigh stations, or 'around here' — rather than asking him where he is.",
         "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "list_recent_transactions",
+        "description": "List Dale's most recent budget transactions with their IDs, so a specific one can be identified for removal. Read-only, no confirmation needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_results": {"type": "integer", "description": "How many recent transactions to show. Defaults to 10."}
+            }
+        }
+    },
+    {
+        "name": "delete_transaction",
+        "description": "Permanently delete a specific budget transaction by its ID (get this from list_recent_transactions first). Requires user confirmation before deleting.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "transaction_id": {"type": "string", "description": "The ID of the transaction to delete."}
+            },
+            "required": ["transaction_id"]
+        }
     },
     {
         "name": "search_past_conversations",
@@ -227,7 +255,24 @@ TOOLS = [
 
 def execute_tool(name, tool_input):
     try:
-        if name == "get_current_location":
+        if name == "list_recent_transactions":
+            max_results = tool_input.get("max_results", 10)
+            result = supabase.table("budget_transactions").select("*").order("created_at", desc=True).limit(max_results).execute()
+            if not result.data:
+                return "No transactions found."
+            lines = [f"[{t['id']}] {t['transaction_date']} — ${t['amount']:.2f} — {t['category']} — {t.get('description', '')}" for t in result.data]
+            return "Recent transactions:\n" + "\n".join(lines)
+
+        elif name == "delete_transaction":
+            transaction_id = tool_input["transaction_id"]
+            match_result = supabase.table("budget_transactions").select("*").eq("id", transaction_id).execute()
+            if not match_result.data:
+                return f"No transaction found with id {transaction_id}."
+            match = match_result.data[0]
+            supabase.table("budget_transactions").delete().eq("id", transaction_id).execute()
+            return f"Deleted: ${match['amount']:.2f} — {match['category']} — {match.get('description', '')}"
+
+        elif name == "get_current_location":
             print(f"[Location-Tool-Debug] get_current_location called, returning: {current_request_location}")
             return current_request_location if current_request_location else "Location not currently available."
 
