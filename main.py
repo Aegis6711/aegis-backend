@@ -681,6 +681,8 @@ const receiptBtn = document.getElementById('receiptBtn');
       statusEl.textContent = "Upload failed — try again.";
     }
     receiptInput.value = "";
+  });
+
   alert("Checkpoint B: before docImportBtn setup");
   const docImportBtn = document.getElementById('docImportBtn');
   const docImportInput = document.getElementById('docImportInput');

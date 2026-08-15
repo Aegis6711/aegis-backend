@@ -1,0 +1,370 @@
+﻿
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Aegis</title>
+<style>
+  body {
+    margin: 0; padding: 0;
+    height: 100vh;
+    background: #1a0533;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: -apple-system, sans-serif;
+    color: white;
+    text-align: center;
+  }
+  #orb {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #c084fc 0%, #8b3ce8 50%, #2a0f4d 100%);
+    box-shadow: 0 0 60px 20px rgba(139,60,232,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 60px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    user-select: none;
+  }
+  #orb.listening { animation: pulse 1s infinite; box-shadow: 0 0 80px 30px rgba(139,60,232,0.8); }
+  #orb.thinking { opacity: 0.6; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  #status { margin-top: 30px; font-size: 18px; min-height: 24px; padding: 0 30px; }
+  #transcript { margin-top: 15px; font-size: 14px; color: #c9a8f5; padding: 0 30px; min-height: 20px; }
+</style>
+</head>
+<body>
+  <div id="modeToggle" style="margin-bottom: 20px;">
+    <button id="chatModeBtn" style="padding:8px 16px; margin:4px; border-radius:20px; border:none; background:#8b3ce8; color:white;">Chat</button>
+    <button id="translateModeBtn" style="padding:8px 16px; margin:4px; border-radius:20px; border:none; background:#4a1a7a; color:white;">Translate</button>
+  </div>
+
+  <div id="chatUI">
+    <div id="orb">🎤</div>
+    <br>
+    <button id="receiptBtn" style="margin-top:15px; padding:10px 18px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:14px;">📷 Log Receipt</button>
+    <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
+    <br>
+    <button id="docImportBtn" style="margin-top:10px; padding:10px 18px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:14px;">📄 Import Document</button>
+    <input type="file" id="docImportInput" accept="application/pdf,image/*" style="display:none;">
+  </div>
+
+  <div id="translateUI" style="display:none;">
+    <select id="langSelect" style="padding:10px; border-radius:10px; margin-bottom:20px; font-size:16px;">
+      <option value="Spanish">Spanish — Español</option>
+      <option value="French">French — Français</option>
+      <option value="German">German — Deutsch</option>
+      <option value="Italian">Italian — Italiano</option>
+      <option value="Portuguese">Portuguese — Português</option>
+      <option value="Japanese">Japanese — 日本語</option>
+      <option value="Mandarin Chinese">Mandarin Chinese — 中文</option>
+      <option value="Arabic">Arabic — العربية</option>
+      <option value="Hebrew">Hebrew — עברית</option>
+      <option value="Russian">Russian — Русский</option>
+    </select>
+    <br>
+    <button id="theySpeakBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#8b3ce8; color:white; font-size:16px;">🎤 They Speak</button>
+    <button id="youSpeakBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:16px;">🎤 You Speak</button>
+    <br>
+    <button id="photoTranslateBtn" style="padding:16px 24px; margin:8px; border-radius:16px; border:none; background:#6b2fa8; color:white; font-size:16px;">📷 Translate Photo</button>
+    <input type="file" id="photoTranslateInput" accept="image/*" capture="environment" style="display:none;">
+  </div>
+
+  <div id="status">Tap the orb to talk</div>
+  <div id="transcript"></div>
+
+<script>
+  window.addEventListener('error', function(e) {
+    document.body.innerHTML = '<div style="color:white; padding:20px; font-size:14px; word-wrap:break-word;">JS ERROR: ' + e.message + '<br>File: ' + e.filename + '<br>Line: ' + e.lineno + ', Col: ' + e.colno + '</div>';
+  });
+</script>
+<script>
+  const orb = document.getElementById('orb');
+  const statusEl = document.getElementById('status');
+  const transcriptEl = document.getElementById('transcript');
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+  let currentLocation = null;
+
+  function reverseGeocode(lat, lon) {
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`)
+      .then(res => res.json())
+      .then(data => {
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.county || '';
+        const state = addr.state || '';
+        currentLocation = [city, state].filter(Boolean).join(', ');
+        statusEl.textContent = "Location ready: " + currentLocation + " — tap orb to talk";
+      })
+      .catch(err => {
+        statusEl.textContent = "Reverse geocode failed: " + err.message;
+      });
+  }
+
+  function initLocation() {
+    statusEl.textContent = "Getting location...";
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          statusEl.textContent = "Got coordinates, looking up city...";
+          reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        },
+        (err) => {
+          statusEl.textContent = "Location error: " + err.message + " (code " + err.code + ")";
+        },
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    } else {
+      statusEl.textContent = "Location not supported by this browser";
+    }
+  }
+  initLocation();
+  setInterval(initLocation, 5 * 60 * 1000);
+
+  function cleanForSpeech(text) {
+    text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+    text = text.replace(/\*(.*?)\*/g, '$1');
+    text = text.replace(/^[-*]\s+/gm, '');
+    text = text.replace(/^-{2,}\s*$/gm, '');
+    text = text.replace(/-{2,}/g, ' ');
+    text = text.replace(/#+\s*/g, '');
+    text = text.replace(/`([^`]*)`/g, '$1');
+    return text;
+  }
+
+  function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(cleanForSpeech(text));
+    utterance.rate = 1.0;
+    utterance.onend = () => {
+      statusEl.textContent = "Tap the orb to talk";
+      orb.classList.remove('thinking');
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startListening() {
+    if (isListening) return;
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isListening = true;
+      orb.classList.add('listening');
+      statusEl.textContent = "Listening...";
+      transcriptEl.textContent = "";
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      transcriptEl.textContent = '"' + text + '"';
+      sendToAegis(text);
+    };
+
+    recognition.onerror = (event) => {
+      statusEl.textContent = "Didn't catch that — tap to try again";
+      orb.classList.remove('listening');
+      isListening = false;
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      orb.classList.remove('listening');
+    };
+
+    recognition.start();
+  }
+
+  async function sendToAegis(message) {
+    statusEl.textContent = "Thinking...";
+    orb.classList.add('thinking');
+    try {
+      const response = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message, location: currentLocation })
+      });
+      const data = await response.json();
+      statusEl.textContent = data.reply;
+      speak(data.reply);
+    } catch (err) {
+      statusEl.textContent = "Connection error — tap to try again";
+      orb.classList.remove('thinking');
+    }
+  }
+
+const receiptBtn = document.getElementById('receiptBtn');
+  const receiptInput = document.getElementById('receiptInput');
+
+  receiptBtn.addEventListener('click', () => receiptInput.click());
+
+  receiptInput.addEventListener('change', async () => {
+    const file = receiptInput.files[0];
+    if (!file) return;
+    statusEl.textContent = "Reading receipt...";
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/log-receipt', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        const msg = `Logged $${data.amount.toFixed(2)} at ${data.vendor} (${data.category})`;
+        statusEl.textContent = msg;
+        speak(msg);
+      } else {
+        statusEl.textContent = data.error || "Couldn't read that receipt.";
+      }
+    } catch (err) {
+      statusEl.textContent = "Upload failed — try again.";
+    }
+    receiptInput.value = "";
+  alert("Checkpoint B: before docImportBtn setup");
+  const docImportBtn = document.getElementById('docImportBtn');
+  const docImportInput = document.getElementById('docImportInput');
+  alert("Checkpoint C: docImportBtn found = " + (docImportBtn !== null));
+
+  docImportBtn.addEventListener('click', () => docImportInput.click());
+
+  docImportInput.addEventListener('change', async () => {
+    const file = docImportInput.files[0];
+    if (!file) return;
+    statusEl.textContent = "Reading document, this may take a moment...";
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/upload-document', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        const msg = `Imported "${data.filename}" — I've read it and will remember it.`;
+        statusEl.textContent = msg;
+        speak(msg);
+      } else {
+        statusEl.textContent = data.error || "Couldn't read that photo.";
+      }
+    } catch (err) {
+      statusEl.textContent = "Upload failed — try again.";
+    }
+    docImportInput.value = "";
+  });
+
+  alert("Checkpoint A: after docImportInput listener");
+  orb.addEventListener('click', startListening);
+
+  const LANG_CODES = {
+    "Spanish": "es-ES", "French": "fr-FR", "German": "de-DE", "Italian": "it-IT",
+    "Portuguese": "pt-BR", "Japanese": "ja-JP", "Mandarin Chinese": "zh-CN",
+    "Arabic": "ar-SA", "Hebrew": "he-IL", "Russian": "ru-RU"
+  };
+
+  const chatModeBtn = document.getElementById('chatModeBtn');
+  const translateModeBtn = document.getElementById('translateModeBtn');
+  const chatUI = document.getElementById('chatUI');
+  const translateUI = document.getElementById('translateUI');
+  const langSelect = document.getElementById('langSelect');
+  const theySpeakBtn = document.getElementById('theySpeakBtn');
+  const youSpeakBtn = document.getElementById('youSpeakBtn');
+
+  chatModeBtn.addEventListener('click', () => {
+    chatUI.style.display = 'block';
+    translateUI.style.display = 'none';
+    statusEl.textContent = "Tap the orb to talk";
+    transcriptEl.textContent = "";
+  });
+
+  translateModeBtn.addEventListener('click', () => {
+    chatUI.style.display = 'none';
+    translateUI.style.display = 'block';
+    statusEl.textContent = "Choose a language, then tap a button";
+    transcriptEl.textContent = "";
+  });
+
+  function speakInLanguage(text, langCode) {
+    const utterance = new SpeechSynthesisUtterance(cleanForSpeech(text));
+    utterance.lang = langCode;
+    utterance.rate = 1.0;
+    utterance.onend = () => { statusEl.textContent = "Choose a language, then tap a button"; };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function translateAndSpeak(text, targetLanguage, speakLangCode) {
+    statusEl.textContent = "Translating...";
+    try {
+      const response = await fetch('/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, target_language: targetLanguage })
+      });
+      const data = await response.json();
+      transcriptEl.textContent = data.translated;
+      statusEl.textContent = data.translated;
+      speakInLanguage(data.translated, speakLangCode);
+    } catch (err) {
+      statusEl.textContent = "Translation error — try again";
+    }
+  }
+
+  function listenOnce(langCode, onResult) {
+    const rec = new SpeechRecognition();
+    rec.lang = langCode;
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => { statusEl.textContent = "Listening..."; transcriptEl.textContent = ""; };
+    rec.onresult = (event) => onResult(event.results[0][0].transcript);
+    rec.onerror = () => { statusEl.textContent = "Didn't catch that — try again"; };
+    rec.start();
+  }
+
+  theySpeakBtn.addEventListener('click', () => {
+    const targetLang = langSelect.value;
+    const foreignCode = LANG_CODES[targetLang];
+    listenOnce(foreignCode, (heardText) => {
+      transcriptEl.textContent = '"' + heardText + '"';
+      translateAndSpeak(heardText, "English", "en-US");
+    });
+  });
+
+  youSpeakBtn.addEventListener('click', () => {
+    const targetLang = langSelect.value;
+    const foreignCode = LANG_CODES[targetLang];
+    listenOnce("en-US", (heardText) => {
+      transcriptEl.textContent = '"' + heardText + '"';
+      translateAndSpeak(heardText, targetLang, foreignCode);
+    });
+  });
+  const photoTranslateBtn = document.getElementById('photoTranslateBtn');
+  const photoTranslateInput = document.getElementById('photoTranslateInput');
+
+  photoTranslateBtn.addEventListener('click', () => photoTranslateInput.click());
+
+  photoTranslateInput.addEventListener('change', async () => {
+    const file = photoTranslateInput.files[0];
+    if (!file) return;
+    statusEl.textContent = "Reading and identifying language...";
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/translate-photo', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        const langLabel = data.detected_language ? `[${data.detected_language}] ` : '';
+        transcriptEl.textContent = data.original_text ? langLabel + '"' + data.original_text + '"' : '';
+        statusEl.textContent = data.translation;
+        speakInLanguage(data.translation, 'en-US');
+      } else {
+        statusEl.textContent = data.error || "Couldn't read that photo.";
+      }
+    } catch (err) {
+      statusEl.textContent = "Upload failed — try again.";
+    }
+    photoTranslateInput.value = "";
+  });
+
+  console.log("SCRIPT FULLY LOADED - all buttons should work");
+  alert("Script loaded successfully");
+</script>
+</body>
+</html>
+
