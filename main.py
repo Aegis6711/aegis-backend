@@ -231,7 +231,6 @@ def execute_tool(name, tool_input):
             return current_request_location if current_request_location else "Location not currently available."
 
         elif name == "search_past_conversations":
-        if name == "search_past_conversations":
             query = tool_input["query"]
             result = supabase.table("phone_conversation_history").select("role, content, created_at").ilike("content", f"%{query}%").order("created_at", desc=True).limit(15).execute()
             if not result.data:
