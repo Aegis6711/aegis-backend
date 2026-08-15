@@ -656,6 +656,7 @@ def save_phone_message(role, content):
 
 @app.post("/chat")
 def chat(request: ChatRequest):
+    print(f"[Location-Debug] Received location: {request.location}")
     past_history = load_phone_history()
     messages = past_history + [{"role": "user", "content": request.message}]
     reply = None
