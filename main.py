@@ -69,7 +69,10 @@ def build_system_prompt(location=None):
         "interests — give honest assessments, don't just agree with "
         "everything. You can manage his calendar, track his budget, "
         "take quick notes, and search the web for current information. "
-        "You can also list and delete budget transactions (including "
+         "You can also read and remember personal documents Dale imports "
+        "(insurance policies, manuals, contracts) — use search_my_documents "
+        "whenever he asks something a document might answer, rather than "
+        "saying you don't know. You can also list and delete budget transactions"(including "
         "receipts logged via photo) — use list_recent_transactions to "
         "find one, then confirm with Dale verbally before calling "
         "delete_transaction. If he asks you to remove/delete a recent "
@@ -136,6 +139,22 @@ TOOLS = [
                 "transaction_id": {"type": "string", "description": "The ID of the transaction to delete."}
             },
             "required": ["transaction_id"]
+        }
+    },
+    {
+        "name": "list_my_documents",
+        "description": "List the personal documents Dale has imported (insurance policies, manuals, contracts, etc.) that you have full knowledge of. Read-only.",
+        "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "search_my_documents",
+        "description": "Search through the full content of Dale's imported personal documents for specific information — use this whenever he asks something that could be answered by a document he's shared with you (insurance details, manual specs, contract terms, etc.).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to search for within the documents."}
+            },
+            "required": ["query"]
         }
     },
     {
@@ -271,6 +290,26 @@ def execute_tool(name, tool_input):
             match = match_result.data[0]
             supabase.table("budget_transactions").delete().eq("id", transaction_id).execute()
             return f"Deleted: ${match['amount']:.2f} — {match['category']} — {match.get('description', '')}"
+
+        if name == "list_my_documents":
+            result = supabase.table("personal_documents").select("filename, uploaded_at").order("uploaded_at", desc=True).execute()
+            if not result.data:
+                return "No documents have been imported yet."
+            lines = [f"{d['filename']} (imported {d['uploaded_at'][:10]})" for d in result.data]
+            return "Imported documents:\n" + "\n".join(lines)
+
+        elif name == "search_my_documents":
+            query = tool_input["query"]
+            result = supabase.table("personal_documents").select("filename, content").ilike("content", f"%{query}%").execute()
+            if not result.data:
+                return f"No imported document mentions '{query}'."
+            snippets = []
+            for d in result.data:
+                idx = d["content"].lower().find(query.lower())
+                start = max(0, idx - 150)
+                end = min(len(d["content"]), idx + 350)
+                snippets.append(f"From '{d['filename']}':\n...{d['content'][start:end]}...")
+            return "\n\n".join(snippets)
 
         elif name == "get_current_location":
             print(f"[Location-Tool-Debug] get_current_location called, returning: {current_request_location}")
@@ -464,6 +503,9 @@ def voice_app():
     <br>
     <button id="receiptBtn" style="margin-top:15px; padding:10px 18px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:14px;">📷 Log Receipt</button>
     <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
+    <br>
+    <button id="docImportBtn" style="margin-top:10px; padding:10px 18px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:14px;">📄 Import Document</button>
+    <input type="file" id="docImportInput" accept="application/pdf,image/*" style="display:none;">
   </div>
 
   <div id="translateUI" style="display:none;">
@@ -633,6 +675,31 @@ const receiptBtn = document.getElementById('receiptBtn');
       statusEl.textContent = "Upload failed — try again.";
     }
     receiptInput.value = "";
+  const docImportBtn = document.getElementById('docImportBtn');
+  const docImportInput = document.getElementById('docImportInput');
+
+  docImportBtn.addEventListener('click', () => docImportInput.click());
+
+  docImportInput.addEventListener('change', async () => {
+    const file = docImportInput.files[0];
+    if (!file) return;
+    statusEl.textContent = "Reading document, this may take a moment...";
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/upload-document', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        const msg = `Imported "${data.filename}" — I've read it and will remember it.`;
+        statusEl.textContent = msg;
+        speak(msg);
+      } else {
+        statusEl.textContent = data.error || "Couldn't read that document.";
+      }
+    } catch (err) {
+      statusEl.textContent = "Upload failed — try again.";
+    }
+    docImportInput.value = "";
   });
   orb.addEventListener('click', startListening);
 
@@ -761,6 +828,51 @@ from fastapi import File, UploadFile
 import base64
 import json as _json
 
+@app.post("/upload-document")
+async def upload_document(file: UploadFile = File(...)):
+    file_bytes = await file.read()
+    b64 = base64.b64encode(file_bytes).decode("utf-8")
+    media_type = file.content_type or "application/octet-stream"
+
+    if media_type == "application/pdf":
+        content_block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+    elif media_type.startswith("image/"):
+        content_block = {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
+    else:
+        return {"success": False, "error": "Unsupported file type — please use a PDF or photo."}
+
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=4000,
+        system=(
+            "Transcribe the complete text content of this document as "
+            "accurately and thoroughly as possible, preserving structure "
+            "(headings, sections, key numbers/dates) where it aids "
+            "understanding. Output only the transcribed content, no "
+            "commentary."
+        ),
+        messages=[{
+            "role": "user",
+            "content": [
+                content_block,
+                {"type": "text", "text": "Transcribe this document's full content."}
+            ]
+        }]
+    )
+    extracted_text = "".join(b.text for b in response.content if b.type == "text")
+
+    if not extracted_text.strip():
+        return {"success": False, "error": "Could not extract any readable content."}
+
+    try:
+        supabase.table("personal_documents").insert({
+            "filename": file.filename or "Untitled Document",
+            "content": extracted_text
+        }).execute()
+    except Exception as e:
+        return {"success": False, "error": f"Could not save document: {e}"}
+
+    return {"success": True, "filename": file.filename, "preview": extracted_text[:200]}
 @app.post("/log-receipt")
 async def log_receipt(file: UploadFile = File(...)):
     image_bytes = await file.read()
