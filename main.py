@@ -453,10 +453,16 @@ def voice_app():
   function initLocation() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => reverseGeocode(pos.coords.latitude, pos.coords.longitude),
-        (err) => console.log('Location unavailable:', err),
+        (pos) => {
+          reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        },
+        (err) => {
+          statusEl.textContent = "Location unavailable (check site permissions) — tap orb to talk anyway";
+        },
         { enableHighAccuracy: false, timeout: 10000 }
       );
+    } else {
+      statusEl.textContent = "Location not supported by this browser";
     }
   }
 
