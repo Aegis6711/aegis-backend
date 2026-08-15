@@ -534,11 +534,11 @@ def voice_app():
   <div id="transcript"></div>
 
 <script>
-  window.onerror = function(message, source, lineno, colno, error) {
-    document.body.innerHTML = '<div style="color:white; padding:20px; font-size:16px; word-wrap:break-word;">JS ERROR:<br>' + message + '<br>Line: ' + lineno + ', Col: ' + colno + '</div>';
-    return true;
-  };
-
+  window.addEventListener('error', function(e) {
+    document.body.innerHTML = '<div style="color:white; padding:20px; font-size:14px; word-wrap:break-word;">JS ERROR: ' + e.message + '<br>File: ' + e.filename + '<br>Line: ' + e.lineno + ', Col: ' + e.colno + '</div>';
+  });
+</script>
+<script>
   const orb = document.getElementById('orb');
   const statusEl = document.getElementById('status');
   const transcriptEl = document.getElementById('transcript');
