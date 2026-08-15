@@ -41,10 +41,19 @@ def build_system_prompt(location=None):
     location_text = ""
     if location:
         location_text = (
-            f"\n\nDale's current approximate location: {location}. Use "
-            f"this automatically when he asks about anything nearby "
-            f"(fuel, food, weather, rest stops, weigh stations, etc.) "
-            f"without needing him to specify where he is."
+            f"\n\n🚨 IMPORTANT — DALE'S LIVE LOCATION IS KNOWN: {location}. "
+            f"This is real, current, GPS-based data — not a guess. "
+            f"Whenever he asks about anything nearby (fuel, food, weather, "
+            f"rest stops, weigh stations, directions, 'around here', etc.), "
+            f"you ALREADY KNOW he is in {location} — use it immediately, "
+            f"do not say you don't have his location, do not ask where he "
+            f"is. You have it: {location}."
+        )
+    else:
+        location_text = (
+            "\n\nNote: Dale's location is not currently available for this "
+            "message — if he asks something location-dependent, let him "
+            "know you don't have his current location rather than guessing."
         )
 
     return (
