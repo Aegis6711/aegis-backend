@@ -446,18 +446,23 @@ def voice_app():
         const city = addr.city || addr.town || addr.village || addr.county || '';
         const state = addr.state || '';
         currentLocation = [city, state].filter(Boolean).join(', ');
+        statusEl.textContent = "Location ready: " + currentLocation + " — tap orb to talk";
       })
-      .catch(err => console.log('Reverse geocode failed:', err));
+      .catch(err => {
+        statusEl.textContent = "Reverse geocode failed: " + err.message;
+      });
   }
 
   function initLocation() {
+    statusEl.textContent = "Getting location...";
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          statusEl.textContent = "Got coordinates, looking up city...";
           reverseGeocode(pos.coords.latitude, pos.coords.longitude);
         },
         (err) => {
-          statusEl.textContent = "Location unavailable (check site permissions) — tap orb to talk anyway";
+          statusEl.textContent = "Location error: " + err.message + " (code " + err.code + ")";
         },
         { enableHighAccuracy: false, timeout: 10000 }
       );
@@ -465,7 +470,6 @@ def voice_app():
       statusEl.textContent = "Location not supported by this browser";
     }
   }
-
   initLocation();
   setInterval(initLocation, 5 * 60 * 1000);
 
