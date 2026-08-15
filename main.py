@@ -293,7 +293,9 @@ def execute_tool(name, tool_input):
             return f"Deleted: ${match['amount']:.2f} — {match['category']} — {match.get('description', '')}"
 
         if name == "list_my_documents":
+            print("[Document-Debug] list_my_documents called")
             result = supabase.table("personal_documents").select("filename, uploaded_at").order("uploaded_at", desc=True).execute()
+            print(f"[Document-Debug] Found {len(result.data)} documents")
             if not result.data:
                 return "No documents have been imported yet."
             lines = [f"{d['filename']} (imported {d['uploaded_at'][:10]})" for d in result.data]
@@ -301,7 +303,9 @@ def execute_tool(name, tool_input):
 
         elif name == "search_my_documents":
             query = tool_input["query"]
+            print(f"[Document-Debug] search_my_documents called with query: '{query}'")
             result = supabase.table("personal_documents").select("filename, content").ilike("content", f"%{query}%").execute()
+            print(f"[Document-Debug] Found {len(result.data)} matching documents")
             if not result.data:
                 return f"No imported document mentions '{query}'."
             snippets = []
@@ -683,11 +687,9 @@ const receiptBtn = document.getElementById('receiptBtn');
     receiptInput.value = "";
   });
 
-  alert("Checkpoint B: before docImportBtn setup");
   const docImportBtn = document.getElementById('docImportBtn');
   const docImportInput = document.getElementById('docImportInput');
-  alert("Checkpoint C: docImportBtn found = " + (docImportBtn !== null));
-
+  
   docImportBtn.addEventListener('click', () => docImportInput.click());
 
   docImportInput.addEventListener('change', async () => {
@@ -712,7 +714,6 @@ const receiptBtn = document.getElementById('receiptBtn');
     docImportInput.value = "";
   });
 
-  alert("Checkpoint A: after docImportInput listener");
   orb.addEventListener('click', startListening);
 
   const LANG_CODES = {
@@ -824,8 +825,6 @@ const receiptBtn = document.getElementById('receiptBtn');
     photoTranslateInput.value = "";
   });
 
-  console.log("SCRIPT FULLY LOADED - all buttons should work");
-  alert("Script loaded successfully");
 </script>
 </body>
 </html>
