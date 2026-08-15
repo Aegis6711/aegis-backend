@@ -1054,7 +1054,22 @@ def chat(request: ChatRequest):
     global current_request_location
     current_request_location = request.location
     print(f"[Location-Debug] Received location: {request.location}")
+
     past_history = load_phone_history()
+    is_first_message = len(past_history) == 0
+    briefing_note = ""
+    if is_first_message:
+        briefing_note = (
+            "\n\nThis is the start of a new session (no recent "
+            "conversation history) — before or alongside answering "
+            "Dale's message, proactively check list_events and "
+            "get_budget_summary, and if there's anything genuinely "
+            "relevant (an event today/tomorrow, a budget goal close to "
+            "being hit, anything worth flagging), lead with a brief "
+            "mention of it naturally, the way a real chief-of-staff would "
+            "when you first connect — but don't force it if there's "
+            "nothing notable, and don't make it long."
+        )
     messages = past_history + [{"role": "user", "content": request.message}]
     reply = None
 
@@ -1062,7 +1077,7 @@ def chat(request: ChatRequest):
         response = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=800,
-            system=build_system_prompt(request.location),
+            system=build_system_prompt(request.location) + briefing_note,
             messages=messages,
             tools=TOOLS
         )
