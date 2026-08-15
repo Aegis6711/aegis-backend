@@ -695,13 +695,15 @@ const receiptBtn = document.getElementById('receiptBtn');
         statusEl.textContent = msg;
         speak(msg);
       } else {
-        statusEl.textContent = data.error || "Couldn't read that document.";
+        statusEl.textContent = data.error || "Couldn't read that photo.";
       }
     } catch (err) {
       statusEl.textContent = "Upload failed — try again.";
     }
     docImportInput.value = "";
   });
+
+  alert("Checkpoint A: after docImportInput listener");
   orb.addEventListener('click', startListening);
 
   const LANG_CODES = {
