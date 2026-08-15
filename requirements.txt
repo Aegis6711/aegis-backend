@@ -3,3 +3,4 @@ uvicorn
 anthropic
 supabase
 composio
+python-multipart

@@ -416,6 +416,9 @@ def voice_app():
 
   <div id="chatUI">
     <div id="orb">🎤</div>
+    <br>
+    <button id="receiptBtn" style="margin-top:15px; padding:10px 18px; border-radius:16px; border:none; background:#4a1a7a; color:white; font-size:14px;">📷 Log Receipt</button>
+    <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
   </div>
 
   <div id="translateUI" style="display:none;">
@@ -557,6 +560,32 @@ def voice_app():
     }
   }
 
+const receiptBtn = document.getElementById('receiptBtn');
+  const receiptInput = document.getElementById('receiptInput');
+
+  receiptBtn.addEventListener('click', () => receiptInput.click());
+
+  receiptInput.addEventListener('change', async () => {
+    const file = receiptInput.files[0];
+    if (!file) return;
+    statusEl.textContent = "Reading receipt...";
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/log-receipt', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        const msg = `Logged $${data.amount.toFixed(2)} at ${data.vendor} (${data.category})`;
+        statusEl.textContent = msg;
+        speak(msg);
+      } else {
+        statusEl.textContent = data.error || "Couldn't read that receipt.";
+      }
+    } catch (err) {
+      statusEl.textContent = "Upload failed — try again.";
+    }
+    receiptInput.value = "";
+  });
   orb.addEventListener('click', startListening);
 
   const LANG_CODES = {
@@ -651,6 +680,55 @@ def read_root():
 class TranslateRequest(BaseModel):
     text: str
     target_language: str
+
+
+from fastapi import File, UploadFile
+import base64
+import json as _json
+
+@app.post("/log-receipt")
+async def log_receipt(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    media_type = file.content_type or "image/jpeg"
+
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=500,
+        system=(
+            "You read receipts. Look at this image and extract the vendor "
+            "name, the TOTAL amount paid, and a sensible budget category "
+            "(Fuel, Food, Maintenance, Supplies, Lodging, or similar). "
+            "Respond with ONLY valid JSON, nothing else: "
+            '{"vendor": "...", "amount": 00.00, "category": "..."}'
+        ),
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+                {"type": "text", "text": "Extract vendor, total amount, and category from this receipt."}
+            ]
+        }]
+    )
+    reply_text = "".join(b.text for b in response.content if b.type == "text")
+    cleaned = reply_text.strip().replace("```json", "").replace("```", "").strip()
+
+    try:
+        data = _json.loads(cleaned)
+    except Exception:
+        return {"success": False, "error": "Could not read the receipt clearly."}
+
+    try:
+        supabase.table("budget_transactions").insert({
+            "amount": data["amount"],
+            "type": "expense",
+            "category": data["category"],
+            "description": f"Receipt: {data['vendor']}"
+        }).execute()
+    except Exception as e:
+        return {"success": False, "error": f"Could not save to budget: {e}"}
+
+    return {"success": True, "vendor": data["vendor"], "amount": data["amount"], "category": data["category"]}
 
 
 @app.post("/translate")
