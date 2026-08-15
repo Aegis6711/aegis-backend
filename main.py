@@ -725,19 +725,17 @@ const receiptBtn = document.getElementById('receiptBtn');
   photoTranslateInput.addEventListener('change', async () => {
     const file = photoTranslateInput.files[0];
     if (!file) return;
-    const targetLang = langSelect.value;
-    statusEl.textContent = "Reading and translating photo...";
+    statusEl.textContent = "Reading and identifying language...";
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('target_language', targetLang);
     try {
       const response = await fetch('/translate-photo', { method: 'POST', body: formData });
       const data = await response.json();
       if (data.success) {
-        transcriptEl.textContent = data.original_text ? '"' + data.original_text + '"' : '';
+        const langLabel = data.detected_language ? `[${data.detected_language}] ` : '';
+        transcriptEl.textContent = data.original_text ? langLabel + '"' + data.original_text + '"' : '';
         statusEl.textContent = data.translation;
-        const foreignCode = LANG_CODES[targetLang] || 'en-US';
-        speakInLanguage(data.translation, foreignCode);
+        speakInLanguage(data.translation, 'en-US');
       } else {
         statusEl.textContent = data.error || "Couldn't read that photo.";
       }
@@ -809,7 +807,7 @@ async def log_receipt(file: UploadFile = File(...)):
 
 
 @app.post("/translate-photo")
-async def translate_photo(file: UploadFile = File(...), target_language: str = "English"):
+async def translate_photo(file: UploadFile = File(...)):
     image_bytes = await file.read()
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     media_type = file.content_type or "image/jpeg"
@@ -818,18 +816,20 @@ async def translate_photo(file: UploadFile = File(...), target_language: str = "
         model="claude-sonnet-4-5",
         max_tokens=500,
         system=(
-            "You are a precise visual translator. Look at the image and "
-            "identify any text in it, then translate that text into the "
-            "requested target language. Respond with ONLY valid JSON, "
-            "nothing else: {\"original_text\": \"...\", \"translation\": \"...\"} "
-            "If no readable text is found, use: "
-            "{\"original_text\": \"\", \"translation\": \"No readable text found in the image.\"}"
+            "You are a precise visual translator. Look at the image, "
+            "identify any text in it, detect what language it's written "
+            "in, and translate it into English. Respond with ONLY valid "
+            "JSON, nothing else: {\"detected_language\": \"...\", "
+            "\"original_text\": \"...\", \"translation\": \"...\"} "
+            "If no readable text is found, use: {\"detected_language\": "
+            "\"\", \"original_text\": \"\", \"translation\": \"No readable "
+            "text found in the image.\"}"
         ),
         messages=[{
             "role": "user",
             "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
-                {"type": "text", "text": f"Translate any text in this image into {target_language}."}
+                {"type": "text", "text": "Identify the language and translate this image's text into English."}
             ]
         }]
     )
@@ -841,7 +841,12 @@ async def translate_photo(file: UploadFile = File(...), target_language: str = "
     except Exception:
         return {"success": False, "error": "Could not read that image clearly."}
 
-    return {"success": True, "original_text": data.get("original_text", ""), "translation": data.get("translation", "")}
+    return {
+        "success": True,
+        "detected_language": data.get("detected_language", ""),
+        "original_text": data.get("original_text", ""),
+        "translation": data.get("translation", "")
+    }
 
 
 @app.post("/translate")
