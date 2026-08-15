@@ -1050,6 +1050,7 @@ def save_phone_message(role, content):
 current_request_location = None
 
 @app.post("/chat")
+@app.post("/chat")
 def chat(request: ChatRequest):
     global current_request_location
     current_request_location = request.location
