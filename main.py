@@ -106,6 +106,11 @@ composio_client = Composio(api_key=COMPOSIO_API_KEY) if COMPOSIO_API_KEY else No
 TOOLS = [
     {"type": "web_search_20250305", "name": "web_search"},
     {
+        "name": "get_current_location",
+        "description": "Get Dale's real, current GPS-based location right now. ALWAYS call this tool first whenever he asks about anything nearby — fuel, food, weather, rest stops, directions, weigh stations, or 'around here' — rather than asking him where he is.",
+        "input_schema": {"type": "object", "properties": {}}
+    },
+    {
         "name": "search_past_conversations",
         "description": "Search back through the full conversation history (not just the recent messages) for a specific topic or thing Dale mentioned before. Use this whenever he references a past conversation you don't currently have visibility into — e.g. 'remember when I told you about X' or 'what did we discuss the other day about Y'.",
         "input_schema": {
@@ -222,6 +227,10 @@ TOOLS = [
 
 def execute_tool(name, tool_input):
     try:
+        if name == "get_current_location":
+            return current_request_location if current_request_location else "Location not currently available."
+
+        elif name == "search_past_conversations":
         if name == "search_past_conversations":
             query = tool_input["query"]
             result = supabase.table("phone_conversation_history").select("role, content, created_at").ilike("content", f"%{query}%").order("created_at", desc=True).limit(15).execute()
@@ -675,8 +684,12 @@ def save_phone_message(role, content):
     supabase.table("phone_conversation_history").insert({"role": role, "content": content}).execute()
 
 
+current_request_location = None
+
 @app.post("/chat")
 def chat(request: ChatRequest):
+    global current_request_location
+    current_request_location = request.location
     print(f"[Location-Debug] Received location: {request.location}")
     past_history = load_phone_history()
     messages = past_history + [{"role": "user", "content": request.message}]
