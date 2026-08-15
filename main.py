@@ -70,7 +70,9 @@ def build_system_prompt(location=None):
         "everything. You can manage his calendar, track his budget, "
         "take quick notes, and search the web for current information. "
          "You can also read and remember personal documents Dale imports "
-        "(insurance policies, manuals, contracts) — use search_my_documents "
+        "(insurance policies, manuals, contracts). Use read_full_document "
+        "for general questions about a document's content ('what's this "
+        "about', 'summarize it'), and search_my_documents "
         "whenever he asks something a document might answer, rather than "
         "saying you don't know. You can also list and delete budget "
         "transactions (including receipts logged via photo) — use "
@@ -146,6 +148,16 @@ TOOLS = [
         "name": "list_my_documents",
         "description": "List the personal documents Dale has imported (insurance policies, manuals, contracts, etc.) that you have full knowledge of. Read-only.",
         "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "read_full_document",
+        "description": "Read the ENTIRE content of a specific imported document — use this when Dale asks something general about a document ('tell me about this document', 'what's in it') rather than a specific keyword search. If he doesn't specify a filename, this reads the most recently imported document.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "Optional — part of the filename to match. Leave blank to read the most recent document."}
+            }
+        }
     },
     {
         "name": "search_my_documents",
@@ -300,6 +312,20 @@ def execute_tool(name, tool_input):
                 return "No documents have been imported yet."
             lines = [f"{d['filename']} (imported {d['uploaded_at'][:10]})" for d in result.data]
             return "Imported documents:\n" + "\n".join(lines)
+
+        elif name == "read_full_document":
+            filename_query = tool_input.get("filename", "")
+            if filename_query:
+                result = supabase.table("personal_documents").select("filename, content").ilike("filename", f"%{filename_query}%").execute()
+            else:
+                result = supabase.table("personal_documents").select("filename, content").order("uploaded_at", desc=True).limit(1).execute()
+            if not result.data:
+                return "No matching document found."
+            doc = result.data[0]
+            content = doc["content"]
+            if len(content) > 8000:
+                content = content[:8000] + "\n...[truncated, document is longer]"
+            return f"Full content of '{doc['filename']}':\n\n{content}"
 
         elif name == "search_my_documents":
             query = tool_input["query"]
