@@ -27,7 +27,7 @@ def load_user_facts():
         return {}
 
 
-def build_system_prompt():
+def build_system_prompt(location=None):
     facts = load_user_facts()
     facts_text = ""
     if facts:
@@ -36,6 +36,15 @@ def build_system_prompt():
             f"\n\nSTANDING FACTS ABOUT DALE (permanently saved, always true "
             f"unless he tells you otherwise):\n{facts_lines}\n"
             f"Use these naturally without being told again."
+        )
+
+    location_text = ""
+    if location:
+        location_text = (
+            f"\n\nDale's current approximate location: {location}. Use "
+            f"this automatically when he asks about anything nearby "
+            f"(fuel, food, weather, rest stops, weigh stations, etc.) "
+            f"without needing him to specify where he is."
         )
 
     return (
@@ -67,6 +76,7 @@ def build_system_prompt():
         "immediately see, use search_past_conversations before assuming "
         "you don't have access. "
         f"{facts_text}"
+        f"{location_text}"
         ""
         "You can read Dale's recent emails and send emails on his behalf "
         "via his connected Gmail — always confirm with him verbally before "
@@ -337,6 +347,7 @@ def execute_tool(name, tool_input):
 
 class ChatRequest(BaseModel):
     message: str
+    location: str | None = None
 
 
 @app.get("/")
@@ -416,6 +427,32 @@ def voice_app():
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let isListening = false;
+  let currentLocation = null;
+
+  function reverseGeocode(lat, lon) {
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`)
+      .then(res => res.json())
+      .then(data => {
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.county || '';
+        const state = addr.state || '';
+        currentLocation = [city, state].filter(Boolean).join(', ');
+      })
+      .catch(err => console.log('Reverse geocode failed:', err));
+  }
+
+  function initLocation() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => reverseGeocode(pos.coords.latitude, pos.coords.longitude),
+        (err) => console.log('Location unavailable:', err),
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    }
+  }
+
+  initLocation();
+  setInterval(initLocation, 5 * 60 * 1000);
 
   function cleanForSpeech(text) {
     text = text.replace(/\*\*(.*?)\*\*/g, '$1');
@@ -479,7 +516,7 @@ def voice_app():
       const response = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ message: message, location: currentLocation })
       });
       const data = await response.json();
       statusEl.textContent = data.reply;
@@ -627,7 +664,7 @@ def chat(request: ChatRequest):
         response = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=800,
-            system=build_system_prompt(),
+            system=build_system_prompt(request.location),
             messages=messages,
             tools=TOOLS
         )
