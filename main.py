@@ -812,6 +812,9 @@ const receiptBtn = document.getElementById('receiptBtn');
     }
     photoTranslateInput.value = "";
   });
+
+  console.log("SCRIPT FULLY LOADED - all buttons should work");
+  alert("Script loaded successfully");
 </script>
 </body>
 </html>
