@@ -228,6 +228,7 @@ TOOLS = [
 def execute_tool(name, tool_input):
     try:
         if name == "get_current_location":
+            print(f"[Location-Tool-Debug] get_current_location called, returning: {current_request_location}")
             return current_request_location if current_request_location else "Location not currently available."
 
         elif name == "search_past_conversations":
