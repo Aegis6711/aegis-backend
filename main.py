@@ -651,59 +651,54 @@ def voice_app():
 
   function startListening() {
     if (isListening) return;
-    isListening = true;
-    orb.classList.add('listening');
-    statusEl.textContent = "Listening...";
-    transcriptEl.textContent = "";
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
 
     let finalTranscript = '';
     let silenceTimer = null;
-    let manualStop = false;
     const SILENCE_DELAY_MS = 4000;
 
-    function finishUp() {
-      manualStop = true;
+    recognition.onstart = () => {
+      isListening = true;
+      orb.classList.add('listening');
+      statusEl.textContent = "Listening...";
+      transcriptEl.textContent = "";
+      finalTranscript = '';
+    };
+
+    recognition.onresult = (event) => {
       clearTimeout(silenceTimer);
+      const latestResult = event.results[event.results.length - 1];
+      finalTranscript += (finalTranscript ? ' ' : '') + latestResult[0].transcript;
+      transcriptEl.textContent = '"' + finalTranscript + '"';
+      silenceTimer = setTimeout(() => { recognition.stop(); }, SILENCE_DELAY_MS);
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === 'no-speech') return;
+      statusEl.textContent = "Didn't catch that — tap to try again";
+      orb.classList.remove('listening');
+      isListening = false;
+      clearTimeout(silenceTimer);
+    };
+
+    recognition.onend = () => {
       isListening = false;
       orb.classList.remove('listening');
+      clearTimeout(silenceTimer);
       const text = finalTranscript.trim();
       if (text) {
         sendToAegis(text);
       } else {
         statusEl.textContent = "Tap the orb to talk";
       }
-    }
+    };
 
-    function runRecognitionChunk() {
-      recognition = new SpeechRecognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.continuous = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onresult = (event) => {
-        const chunk = event.results[0][0].transcript;
-        finalTranscript += (finalTranscript ? ' ' : '') + chunk;
-        transcriptEl.textContent = '"' + finalTranscript + '"';
-        clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(finishUp, SILENCE_DELAY_MS);
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'no-speech') {
-          return;
-        }
-        finishUp();
-      };
-
-      recognition.onend = () => {
-        if (!manualStop) {
-          runRecognitionChunk();
-        }
-      };
-
-      recognition.start();
-    }
+    recognition.start();
+  }
 
     silenceTimer = setTimeout(finishUp, SILENCE_DELAY_MS);
     runRecognitionChunk();
