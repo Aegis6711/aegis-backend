@@ -653,31 +653,53 @@ def voice_app():
     if (isListening) return;
     recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
+
+    let finalTranscript = '';
+    let silenceTimer = null;
+    const SILENCE_DELAY_MS = 2500;
 
     recognition.onstart = () => {
       isListening = true;
       orb.classList.add('listening');
       statusEl.textContent = "Listening...";
       transcriptEl.textContent = "";
+      finalTranscript = '';
     };
 
     recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript;
-      transcriptEl.textContent = '"' + text + '"';
-      sendToAegis(text);
+      clearTimeout(silenceTimer);
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      transcriptEl.textContent = '"' + (finalTranscript + interim) + '"';
+      silenceTimer = setTimeout(() => { recognition.stop(); }, SILENCE_DELAY_MS);
     };
 
     recognition.onerror = (event) => {
       statusEl.textContent = "Didn't catch that — tap to try again";
       orb.classList.remove('listening');
       isListening = false;
+      clearTimeout(silenceTimer);
     };
 
     recognition.onend = () => {
       isListening = false;
       orb.classList.remove('listening');
+      clearTimeout(silenceTimer);
+      const text = finalTranscript.trim();
+      if (text) {
+        sendToAegis(text);
+      } else {
+        statusEl.textContent = "Tap the orb to talk";
+      }
     };
 
     recognition.start();
