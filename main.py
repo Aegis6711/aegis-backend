@@ -651,58 +651,62 @@ def voice_app():
 
   function startListening() {
     if (isListening) return;
-    recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
+    isListening = true;
+    orb.classList.add('listening');
+    statusEl.textContent = "Listening...";
+    transcriptEl.textContent = "";
 
     let finalTranscript = '';
     let silenceTimer = null;
+    let manualStop = false;
     const SILENCE_DELAY_MS = 2500;
 
-    recognition.onstart = () => {
-      isListening = true;
-      orb.classList.add('listening');
-      statusEl.textContent = "Listening...";
-      transcriptEl.textContent = "";
-      finalTranscript = '';
-    };
-
-    recognition.onresult = (event) => {
+    function finishUp() {
+      manualStop = true;
       clearTimeout(silenceTimer);
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + ' ';
-        } else {
-          interim += event.results[i][0].transcript;
-        }
-      }
-      transcriptEl.textContent = '"' + (finalTranscript + interim) + '"';
-      silenceTimer = setTimeout(() => { recognition.stop(); }, SILENCE_DELAY_MS);
-    };
-
-    recognition.onerror = (event) => {
-      statusEl.textContent = "Didn't catch that — tap to try again";
-      orb.classList.remove('listening');
-      isListening = false;
-      clearTimeout(silenceTimer);
-    };
-
-    recognition.onend = () => {
       isListening = false;
       orb.classList.remove('listening');
-      clearTimeout(silenceTimer);
       const text = finalTranscript.trim();
       if (text) {
         sendToAegis(text);
       } else {
         statusEl.textContent = "Tap the orb to talk";
       }
-    };
+    }
 
-    recognition.start();
+    function runRecognitionChunk() {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        const chunk = event.results[0][0].transcript;
+        finalTranscript += (finalTranscript ? ' ' : '') + chunk;
+        transcriptEl.textContent = '"' + finalTranscript + '"';
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(finishUp, SILENCE_DELAY_MS);
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error === 'no-speech') {
+          return;
+        }
+        finishUp();
+      };
+
+      recognition.onend = () => {
+        if (!manualStop) {
+          runRecognitionChunk();
+        }
+      };
+
+      recognition.start();
+    }
+
+    silenceTimer = setTimeout(finishUp, SILENCE_DELAY_MS);
+    runRecognitionChunk();
   }
 
   async function sendToAegis(message) {
