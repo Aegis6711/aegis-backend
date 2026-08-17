@@ -640,13 +640,31 @@ def voice_app():
   }
 
   function speak(text) {
-    const utterance = new SpeechSynthesisUtterance(cleanForSpeech(text));
-    utterance.rate = 1.0;
-    utterance.onend = () => {
-      statusEl.textContent = "Tap the orb to talk";
-      orb.classList.remove('thinking');
-    };
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.cancel();
+    const cleaned = cleanForSpeech(text);
+    const chunks = cleaned.match(/[^.!?]+[.!?]+|\S+$/g) || [cleaned];
+
+    let i = 0;
+    function speakNextChunk() {
+      if (i >= chunks.length) {
+        statusEl.textContent = "Tap the orb to talk";
+        orb.classList.remove('thinking');
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(chunks[i].trim());
+      utterance.rate = 1.0;
+      utterance.onend = () => {
+        i++;
+        speakNextChunk();
+      };
+      utterance.onerror = (e) => {
+        statusEl.textContent = "Speech error: " + e.error;
+        orb.classList.remove('thinking');
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+
+    setTimeout(speakNextChunk, 50);
   }
 
   function startListening() {
