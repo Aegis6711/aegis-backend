@@ -1077,7 +1077,7 @@ def chat(request: ChatRequest):
     for _ in range(5):
         response = client.messages.create(
             model="claude-sonnet-4-5",
-            max_tokens=800,
+            max_tokens=2500,
             system=build_system_prompt(request.location) + briefing_note,
             messages=messages,
             tools=TOOLS
