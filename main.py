@@ -667,8 +667,15 @@ def voice_app():
     setTimeout(speakNextChunk, 50);
   }
 
+  let currentFetchController = null;
+
   function startListening() {
     if (isListening) return;
+    window.speechSynthesis.cancel();
+    if (currentFetchController) {
+      currentFetchController.abort();
+      currentFetchController = null;
+    }
     recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
@@ -719,18 +726,35 @@ def voice_app():
   }
 
   async function sendToAegis(message) {
+    const trimmedLower = message.trim().toLowerCase();
+    if (trimmedLower === 'stop' || trimmedLower === 'stop.' || trimmedLower === 'aegis stop' || trimmedLower === 'stop stop') {
+      window.speechSynthesis.cancel();
+      if (currentFetchController) {
+        currentFetchController.abort();
+        currentFetchController = null;
+      }
+      statusEl.textContent = "Tap the orb to talk";
+      orb.classList.remove('thinking');
+      return;
+    }
+
     statusEl.textContent = "Thinking...";
     orb.classList.add('thinking');
+    currentFetchController = new AbortController();
     try {
       const response = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message, location: currentLocation })
+        body: JSON.stringify({ message: message, location: currentLocation }),
+        signal: currentFetchController.signal
       });
       const data = await response.json();
       statusEl.textContent = data.reply;
       speak(data.reply);
     } catch (err) {
+      if (err.name === 'AbortError') {
+        return;
+      }
       statusEl.textContent = "Connection error — tap to try again";
       orb.classList.remove('thinking');
     }
