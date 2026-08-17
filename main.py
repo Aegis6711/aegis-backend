@@ -700,10 +700,6 @@ def voice_app():
     recognition.start();
   }
 
-    silenceTimer = setTimeout(finishUp, SILENCE_DELAY_MS);
-    runRecognitionChunk();
-  }
-
   async function sendToAegis(message) {
     statusEl.textContent = "Thinking...";
     orb.classList.add('thinking');
