@@ -659,7 +659,7 @@ def voice_app():
     let finalTranscript = '';
     let silenceTimer = null;
     let manualStop = false;
-    const SILENCE_DELAY_MS = 2500;
+    const SILENCE_DELAY_MS = 4000;
 
     function finishUp() {
       manualStop = true;
