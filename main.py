@@ -386,7 +386,7 @@ def execute_tool(name, tool_input):
                 print(f"[Composio-Debug] COMPOSIO_API_KEY present: {COMPOSIO_API_KEY is not None}, length: {len(COMPOSIO_API_KEY) if COMPOSIO_API_KEY else 0}")
                 result = composio_client.tools.execute(
                     "GMAIL_FETCH_EMAILS",
-                    user_id="default",
+                    user_id="pg-test-a563afd3-0f3c-4904-a329-fd512504ec8d",
                     arguments={"max_results": max_results},
                     dangerously_skip_version_check=True
                 )
@@ -413,7 +413,7 @@ def execute_tool(name, tool_input):
             try:
                 composio_client.tools.execute(
                     "GMAIL_SEND_EMAIL",
-                    user_id="default",
+                    user_id="pg-test-a563afd3-0f3c-4904-a329-fd512504ec8d",
                     arguments={"recipient_email": to, "subject": subject, "body": body},
                     dangerously_skip_version_check=True
                 )
