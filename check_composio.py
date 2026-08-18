@@ -7,6 +7,7 @@ api_key = os.environ.get("COMPOSIO_API_KEY") or input("Paste your Composio API k
 composio = Composio(api_key=api_key)
 accounts = composio.connected_accounts.list()
 
+print(f"Found {len(accounts.items)} connected accounts.")
 for acc in accounts.items:
     try:
         print(json.dumps(acc.model_dump(), indent=2, default=str))

@@ -378,11 +378,12 @@ def execute_tool(name, tool_input):
             except Exception as e:
                 return f"Error saving fact: {e}"
 
-        elif name == "read_recent_emails":
+                elif name == "read_recent_emails":
             if not composio_client:
                 return "Email isn't configured yet — missing Composio API key."
             try:
                 max_results = tool_input.get("max_results", 5)
+                print(f"[Composio-Debug] COMPOSIO_API_KEY present: {COMPOSIO_API_KEY is not None}, length: {len(COMPOSIO_API_KEY) if COMPOSIO_API_KEY else 0}")
                 result = composio_client.tools.execute(
                     "GMAIL_FETCH_EMAILS",
                     user_id="default",
