@@ -939,6 +939,29 @@ def read_root():
     return {"status": "Aegis backend is alive"}
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_policy():
+    return """
+    <html><body style="font-family: sans-serif; max-width: 700px; margin: 40px auto; line-height: 1.6;">
+    <h1>Privacy Policy</h1>
+    <p>This messaging service is operated by Dale Kielly for personal, individual use only.</p>
+    <p>Mobile phone numbers are never shared, sold, or disclosed to any third party for marketing purposes.</p>
+    <p>Message and data rates may apply. Message frequency varies based on personal use.</p>
+    <p>Contact: PureCain67@gmail.com</p>
+    </body></html>
+    """
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_conditions():
+    return """
+    <html><body style="font-family: sans-serif; max-width: 700px; margin: 40px auto; line-height: 1.6;">
+    <h1>Terms and Conditions</h1>
+    <p>This SMS messaging service is used solely for personal notifications sent by and to the account owner, Dale Kielly.</p>
+    <p>Message and data rates may apply. Reply STOP to opt out at any time.</p>
+    </body></html>
+    """
+
+
 class TranslateRequest(BaseModel):
     text: str
     target_language: str
