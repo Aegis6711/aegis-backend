@@ -750,8 +750,13 @@ def voice_app():
         signal: currentFetchController.signal
       });
       const data = await response.json();
-      statusEl.textContent = data.reply;
-      speak(data.reply);
+      console.log("Received data:", data);
+      if (data.reply) {
+        statusEl.textContent = data.reply;
+        speak(data.reply);
+      } else {
+        statusEl.textContent = "Empty response received: " + JSON.stringify(data).substring(0, 200);
+      }
     } catch (err) {
       if (err.name === 'AbortError') {
         return;
