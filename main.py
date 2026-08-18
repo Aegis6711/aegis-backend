@@ -375,7 +375,7 @@ def execute_tool(name, tool_input):
             try:
                 supabase.table("user_facts").upsert({"fact_key": key, "fact_value": value}, on_conflict="fact_key").execute()
                 return f"Remembered permanently: {key} = {value}"
-                        except Exception as e:
+            except Exception as e:
                 return f"Error saving fact: {e}"
 
         elif name == "read_recent_emails":
